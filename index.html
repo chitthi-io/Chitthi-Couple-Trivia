@@ -157,6 +157,8 @@ h2{ font-family:var(--font-display); font-weight:600; letter-spacing:-.015em;
 .bigscore span{ font-size:.4em; color:var(--slate); }
 .verdict{ font-size:1.05rem; color:var(--slate); max-width:420px; margin:10px auto 26px; }
 .unlock{ margin-top:52px; }
+.trophy3d{ width:min(52vw,220px); aspect-ratio:1; margin:8px auto 30px; }
+.trophy3d canvas{ display:block; width:100% !important; height:100% !important; }
 .voucher{ background:var(--card); border:1px dashed rgba(35,39,47,.22); border-radius:18px;
   box-shadow:var(--shadow); padding:22px 20px; text-align:left; position:relative; }
 .voucher::before,.voucher::after{ content:""; position:absolute; top:50%; width:18px; height:18px;
@@ -221,6 +223,7 @@ footer b{ color:var(--ink); }
       <button class="btn btn-ghost" id="retryBtn">↻ Try again</button>
     </div>
     <div class="unlock" id="unlock" hidden>
+      <div class="trophy3d" id="trophy3d" aria-hidden="true"></div>
       <div class="sec-head">
         <span class="eyebrow">Grand Prize · Unlocked</span>
         <h2>You earned the <span class="ital">real letter</span></h2>
@@ -239,12 +242,15 @@ footer b{ color:var(--ink); }
   </div>
   <footer>
     Made with 💌 by <b>chitthi.io</b><br>
-    A private keepsake — please keep this link between the two of you.
+    A private keepsake — please keep this link between the two of you.<br>
+    <small style="opacity:.55;">Golden Trophy 3D model by Incg5764 — Sketchfab (CC BY)</small>
   </footer>
 </section>
 
 <div class="roast" id="roast" role="status" aria-live="polite"></div>
 
+<script src="three.min.js"></script>
+<script src="GLTFLoader.js"></script>
 <script>
 /* ==========================================================================
    chitthi.io keepsake — THE COUPLE TRIVIA CHALLENGE (template 10)
@@ -427,10 +433,59 @@ const CLIENT_CONFIG = {
       $("#letterSign").textContent = "— " + CFG.sign;
       const r = $("#finalscore").getBoundingClientRect();
       burst(r.left + r.width/2, r.top + r.height/2, 46, GOLD);
+      initTrophy3D();                             /* real 3D golden trophy */
       $("#end").scrollIntoView({ behavior:"smooth", block:"start" });
     }else{
       $("#unlock").hidden = true;
     }
+  }
+
+  /* ---- real 3D golden trophy (self-hosted three.js, Sketchfab CC-BY) ---- */
+  let trophy3dDone = false;
+  function initTrophy3D(){
+    const mount = $("#trophy3d");
+    if(!mount || trophy3dDone || !window.THREE || !window.THREE.GLTFLoader) return;
+    trophy3dDone = true;
+    try{
+      const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const renderer = new THREE.WebGLRenderer({ alpha:true, antialias:true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setSize(mount.clientWidth, mount.clientHeight);
+      mount.appendChild(renderer.domElement);
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 100);
+      scene.add(new THREE.HemisphereLight(0xffffff, 0xd9cfc4, 1.1));
+      const key = new THREE.DirectionalLight(0xfff4d6, 1.6); key.position.set(4, 7, 6); scene.add(key);
+      const rim = new THREE.DirectionalLight(0xffe9e4, 0.6); rim.position.set(-6, 2, -5); scene.add(rim);
+      const api = { ready:false, triangles:0, visible:true };
+      window.__chitthi3d = api;
+      new THREE.GLTFLoader().load("model/model.glb", (gltf)=>{
+        const obj = gltf.scene;
+        const box = new THREE.Box3().setFromObject(obj);
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
+        const s = 1.75 / Math.max(size.x, size.y, size.z);
+        obj.scale.setScalar(s);
+        obj.position.sub(center.multiplyScalar(s));
+        obj.position.y += 0.12;
+        scene.add(obj);
+        api.obj = obj;
+        api.ready = true;
+        if(reduced) renderOne();
+      }, undefined, ()=>console.warn("3D trophy failed to load"));
+      camera.position.set(0, 0.9, 4.6);
+      camera.lookAt(0, 0.05, 0);
+      function renderOne(){ renderer.render(scene, camera); api.triangles = renderer.info.render.triangles; }
+      if(!reduced){
+        (function loop(){
+          requestAnimationFrame(loop);
+          if(!api.visible) return;
+          if(api.obj) api.obj.rotation.y += 0.008;
+          renderOne();
+        })();
+      }else{ renderOne(); }
+      new IntersectionObserver((es)=>es.forEach(e=>{ api.visible = e.isIntersecting; }),{ threshold:0 }).observe(mount);
+    }catch(e){ console.warn("WebGL unavailable — keepsake continues", e); }
   }
 
   $("#retryBtn").addEventListener("click", ()=>{
